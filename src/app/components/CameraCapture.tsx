@@ -90,7 +90,10 @@ export default function CameraCapture() {
           const canvasStream = canvas.captureStream(60); // 60 FPS para melhor qualidade
 
           // Adicionar o áudio original do vídeo ao stream do canvas
-          const audioTracks = (video as any).captureStream().getAudioTracks();
+          const audioTracks =
+            (video as HTMLVideoElement & { captureStream?: () => MediaStream })
+              .captureStream?.()
+              ?.getAudioTracks() || [];
           if (audioTracks.length > 0) {
             audioTracks.forEach((track: MediaStreamTrack) => {
               canvasStream.addTrack(track);
