@@ -1,23 +1,45 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import Image from "next/image";
-import { FaCamera, FaDownload, FaStop } from "react-icons/fa";
-import { FaPlay } from "react-icons/fa";
+import {
+  FaCamera,
+  FaDownload,
+  FaStop,
+  FaPlay,
+  FaVideo,
+  FaSync,
+} from "react-icons/fa";
+
 export default function CameraCapture() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const textOverlayRef = useRef<HTMLDivElement>(null); // Referência para a div do texto
   const [photo, setPhoto] = useState<string | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
+  const [useFrontCamera, setUseFrontCamera] = useState(false);
+  const [recorder, setRecorder] = useState<MediaRecorder | null>(null);
+  const [recordedVideo, setRecordedVideo] = useState<string | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [countdown, setCountdown] = useState(9); // Contagem regressiva de 9s
+  const [currentTime, setCurrentTime] = useState(""); // Timestamp atualizado
+
+  // Atualiza o timestamp a cada segundo
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date().toLocaleString());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Inicia a câmera
   const startCamera = async () => {
     setIsCameraActive(true);
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
-        audio: false,
+        video: { facingMode: useFrontCamera ? "user" : "environment" },
+        audio: true, // Habilita áudio para gravação
       });
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
@@ -28,94 +50,13 @@ export default function CameraCapture() {
     }
   };
 
-  // Tira a foto
-  const takePhoto = () => {
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-
-    if (!video || !canvas) return;
-
-    const context = canvas.getContext("2d");
-    if (!context) return;
-
-    // Ajusta o canvas para o tamanho do vídeo
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-
-    // Desenha o frame do vídeo no canvas
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-    // Adiciona timestamp (data e hora)
-    const timestamp = new Date().toLocaleString();
-    const appName = "BadalaCam";
-
-    // Função para desenhar retângulo com cantos arredondados
-    const drawRoundedRect = (
-      x: number,
-      y: number,
-      width: number,
-      height: number,
-      radius: number
-    ) => {
-      context.beginPath();
-      context.moveTo(x + radius, y);
-      context.lineTo(x + width - radius, y);
-      context.quadraticCurveTo(x + width, y, x + width, y + radius);
-      context.lineTo(x + width, y + height - radius);
-      context.quadraticCurveTo(
-        x + width,
-        y + height,
-        x + width - radius,
-        y + height
-      );
-      context.lineTo(x + radius, y + height);
-      context.quadraticCurveTo(x, y + height, x, y + height - radius);
-      context.lineTo(x, y + radius);
-      context.quadraticCurveTo(x, y, x + radius, y);
-      context.closePath();
-      context.fill();
-    };
-
-    // Configuração do texto do timestamp (topo)
-    context.font = "bold 32px Arial";
-    const textWidth = context.measureText(timestamp).width;
-    const paddingX = 20; // Aumentado padding horizontal
-    const radius = 8; // Raio para cantos arredondados
-
-    // Fundo preto para o timestamp (topo)
-    context.fillStyle = "black";
-    drawRoundedRect(5, 5, textWidth + paddingX * 2, 40, radius);
-
-    // Texto do timestamp
-    context.fillStyle = "white";
-    context.fillText(timestamp, 5 + paddingX, 35);
-
-    // Configuração do texto do BadalaCam (parte inferior)
-    context.font = "bold 24px Arial";
-    const appNameWidth = context.measureText(appName).width;
-    const bottomPadding = 20;
-    const appNameHeight = 35;
-    const bottomY = canvas.height - appNameHeight - bottomPadding;
-
-    // Fundo preto para o BadalaCam
-    context.fillStyle = "black";
-    drawRoundedRect(
-      5,
-      bottomY,
-      appNameWidth + paddingX * 2,
-      appNameHeight,
-      radius
-    );
-
-    // Texto do BadalaCam
-    context.fillStyle = "white";
-    context.fillText(appName, 5 + paddingX, bottomY + 25);
-
-    // Converte para URL de imagem e armazena
-    const photoUrl = canvas.toDataURL("image/jpeg");
-    setPhoto(photoUrl);
-    stopCamera();
-    setIsCameraActive(false);
+  // Alterna entre câmeras
+  const toggleCamera = () => {
+    setUseFrontCamera(!useFrontCamera);
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+      startCamera();
+    }
   };
 
   // Para a câmera
@@ -136,6 +77,254 @@ export default function CameraCapture() {
     link.click();
   };
 
+  // Processa o vídeo com Canvas
+  const processVideoWithCanvas = async (blob: Blob) => {
+    return new Promise<string>((resolve, reject) => {
+      try {
+        // Criar elementos de vídeo e canvas
+        const video = document.createElement("video");
+        video.src = URL.createObjectURL(blob);
+
+        // Criar um canvas para processar os frames
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d", { alpha: false });
+
+        if (!ctx) {
+          reject(new Error("Não foi possível obter o contexto do canvas"));
+          return;
+        }
+
+        // Configurar o MediaRecorder para capturar os frames processados
+        const processedChunks: Blob[] = [];
+        let mediaRecorder: MediaRecorder | null = null;
+
+        // Quando o vídeo estiver carregado
+        video.onloadedmetadata = () => {
+          // Configurar o canvas com as dimensões do vídeo
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+
+          // Criar um stream de canvas para o MediaRecorder com taxa de quadros mais alta
+          const canvasStream = canvas.captureStream(60); // 60 FPS para melhor qualidade
+
+          // Adicionar o áudio original do vídeo ao stream do canvas
+          const audioTracks = (video as any).captureStream().getAudioTracks();
+          if (audioTracks.length > 0) {
+            audioTracks.forEach((track: MediaStreamTrack) => {
+              canvasStream.addTrack(track);
+            });
+          }
+
+          // Configurar o MediaRecorder para gravar o stream do canvas com alta qualidade
+          mediaRecorder = new MediaRecorder(canvasStream, {
+            mimeType: "video/webm;codecs=vp9",
+            videoBitsPerSecond: 8000000, // 8 Mbps para alta qualidade
+          });
+
+          // Coletar os chunks de vídeo processado
+          mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) {
+              processedChunks.push(e.data);
+            }
+          };
+
+          // Quando a gravação terminar, criar o vídeo final
+          mediaRecorder.onstop = () => {
+            const processedBlob = new Blob(processedChunks, {
+              type: "video/webm",
+            });
+            const processedUrl = URL.createObjectURL(processedBlob);
+            resolve(processedUrl);
+          };
+
+          // Iniciar a gravação do canvas com intervalo menor para capturar mais frames
+          mediaRecorder.start(100); // Captura dados a cada 100ms para melhor qualidade
+
+          // Iniciar a reprodução do vídeo
+          video.play();
+        };
+
+        // Processar cada frame do vídeo
+        video.ontimeupdate = () => {
+          // Limpar o canvas antes de desenhar o novo frame
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+          // Desenhar o frame atual no canvas com alta qualidade
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = "high";
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+          // Adicionar texto (mesmo estilo da foto)
+          const timestamp = new Date().toLocaleString();
+          const appName = "BadalaCam";
+
+          // Configuração do texto do timestamp (topo)
+          ctx.font = "bold 32px Arial";
+          const textWidth = ctx.measureText(timestamp).width;
+          const paddingX = 20;
+          const radius = 8;
+
+          // Função para desenhar retângulo com cantos arredondados
+          const drawRoundedRect = (
+            x: number,
+            y: number,
+            width: number,
+            height: number,
+            radius: number
+          ) => {
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + width - radius, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+            ctx.lineTo(x + width, y + height - radius);
+            ctx.quadraticCurveTo(
+              x + width,
+              y + height,
+              x + width - radius,
+              y + height
+            );
+            ctx.lineTo(x + radius, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath();
+            ctx.fill();
+          };
+
+          // Fundo preto para o timestamp (topo)
+          ctx.fillStyle = "black";
+          drawRoundedRect(5, 5, textWidth + paddingX * 2, 40, radius);
+
+          // Texto do timestamp
+          ctx.fillStyle = "white";
+          ctx.fillText(timestamp, 5 + paddingX, 35);
+
+          // Configuração do texto do BadalaCam (parte inferior)
+          ctx.font = "bold 24px Arial";
+          const appNameWidth = ctx.measureText(appName).width;
+          const bottomPadding = 20;
+          const appNameHeight = 35;
+          const bottomY = canvas.height - appNameHeight - bottomPadding;
+
+          // Fundo preto para o BadalaCam
+          ctx.fillStyle = "black";
+          drawRoundedRect(
+            5,
+            bottomY,
+            appNameWidth + paddingX * 2,
+            appNameHeight,
+            radius
+          );
+
+          // Texto do BadalaCam
+          ctx.fillStyle = "white";
+          ctx.fillText(appName, 5 + paddingX, bottomY + 25);
+        };
+
+        // Quando o vídeo terminar, parar a gravação
+        video.onended = () => {
+          if (mediaRecorder && mediaRecorder.state !== "inactive") {
+            mediaRecorder.stop();
+          }
+        };
+
+        // Em caso de erro
+        video.onerror = (error) => {
+          reject(new Error(`Erro ao processar o vídeo: ${error}`));
+        };
+      } catch (error) {
+        reject(error);
+      }
+    });
+  };
+
+  // Inicia a gravação (9 segundos)
+  const startRecording = async () => {
+    if (!stream) return;
+
+    // Configurar o MediaRecorder com alta qualidade
+    const mediaRecorder = new MediaRecorder(stream, {
+      mimeType: "video/webm;codecs=vp9",
+      videoBitsPerSecond: 8000000, // 8 Mbps para alta qualidade
+    });
+    const chunks: Blob[] = [];
+
+    mediaRecorder.ondataavailable = (e) => {
+      chunks.push(e.data);
+    };
+
+    mediaRecorder.onstop = async () => {
+      const blob = new Blob(chunks, { type: "video/webm" });
+
+      // Processa o vídeo com Canvas
+      try {
+        const processedVideoUrl = await processVideoWithCanvas(blob);
+        setRecordedVideo(processedVideoUrl);
+      } catch (err) {
+        console.error("Erro ao processar vídeo:", err);
+        // Fallback para o vídeo original se o processamento falhar
+        const videoUrl = URL.createObjectURL(blob);
+        setRecordedVideo(videoUrl);
+      }
+
+      setIsRecording(false);
+      setCountdown(9); // Reseta o contador
+    };
+
+    // Iniciar a gravação com intervalo menor para capturar mais frames
+    mediaRecorder.start(100); // Captura dados a cada 100ms para melhor qualidade
+    setRecorder(mediaRecorder);
+    setIsRecording(true);
+    setCountdown(9);
+
+    // Contagem regressiva de 9s
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          if (mediaRecorder.state === "recording") {
+            mediaRecorder.stop();
+          }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    // Garantir que a gravação pare após 9 segundos
+    setTimeout(() => {
+      if (mediaRecorder.state === "recording") {
+        mediaRecorder.stop();
+      }
+    }, 9000);
+  };
+
+  // Para a gravação manualmente
+  const stopRecording = () => {
+    if (recorder && isRecording) {
+      recorder.stop();
+      stream?.getTracks().forEach((track) => track.stop()); // Para a câmera após gravar
+    }
+  };
+
+  // Download do vídeo
+  const downloadVideo = () => {
+    if (!recordedVideo) return;
+    const link = document.createElement("a");
+    link.download = `video-${new Date().toISOString()}.webm`;
+    link.href = recordedVideo;
+    link.click();
+  };
+
+  // Para a câmera ao sair do componente
+  useEffect(() => {
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, [stream]);
+
   return (
     <div className="flex flex-col gap-4 items-center justify-center px-4">
       {!isCameraActive && (
@@ -144,13 +333,39 @@ export default function CameraCapture() {
         </span>
       )}
 
-      {/* Vídeo da câmera */}
+      {/* Container da câmera com texto sobreposto */}
       {isCameraActive && (
-        <video ref={videoRef} autoPlay playsInline muted></video>
+        <div className="relative w-full">
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            style={{
+              width: "100%",
+              transform: useFrontCamera ? "scaleX(-1)" : "none", // Espelha a câmera frontal
+            }}
+          ></video>
+
+          {/* Texto sobreposto */}
+          <div
+            ref={textOverlayRef}
+            className="absolute bottom-5 left-3 text-white bg-black bg-opacity-50 p-2 text-base font-bold rounded"
+          >
+            {currentTime}
+          </div>
+        </div>
       )}
 
       {/* Canvas para captura */}
       <canvas ref={canvasRef} style={{ display: "none" }}></canvas>
+
+      {/* Contagem regressiva */}
+      {isRecording && (
+        <div className="text-red-600 font-bold text-xl">
+          Tempo restante: {countdown}s
+        </div>
+      )}
 
       {/* Botões */}
       <div className="flex flex-col gap-4">
@@ -171,19 +386,42 @@ export default function CameraCapture() {
             Iniciar Câmera
           </button>
         )}
-        <button
-          className="bg-zinc-900 text-zinc-50 p-2 rounded-md flex items-center gap-2 justify-center"
-          onClick={takePhoto}
-          disabled={!stream}
-        >
-          <FaCamera />
-          Tirar Foto
-        </button>
+
+        {isCameraActive && (
+          <button
+            className="bg-zinc-900 text-zinc-50 p-2 rounded-md flex items-center gap-2 justify-center"
+            onClick={toggleCamera}
+          >
+            <FaSync />
+            Alternar para {useFrontCamera ? "Traseira" : "Frontal"}
+          </button>
+        )}
+
+        {isCameraActive && (
+          <button
+            className="bg-zinc-900 text-zinc-50 p-2 rounded-md flex items-center gap-2 justify-center"
+            onClick={startRecording}
+            disabled={!stream || isRecording}
+          >
+            <FaVideo />
+            Gravar Vídeo (9s)
+          </button>
+        )}
+
+        {isRecording && (
+          <button
+            className="bg-red-600 text-zinc-50 p-2 rounded-md flex items-center gap-2 justify-center"
+            onClick={stopRecording}
+          >
+            <FaStop />
+            Parar Antes do Tempo
+          </button>
+        )}
 
         {photo && (
           <>
             <div className="flex flex-col gap-4 px-4">
-              <h3>Prévia:</h3>
+              <h3>Prévia da Foto:</h3>
               <Image
                 src={photo}
                 alt="Foto capturada"
@@ -197,6 +435,22 @@ export default function CameraCapture() {
               >
                 <FaDownload />
                 Baixar Foto
+              </button>
+            </div>
+          </>
+        )}
+
+        {recordedVideo && (
+          <>
+            <div className="flex flex-col gap-4 px-4">
+              <h3>Prévia do Vídeo:</h3>
+              <video src={recordedVideo} controls style={{ width: "100%" }} />
+              <button
+                className="bg-zinc-900 text-zinc-50 p-2 rounded-md flex items-center gap-2 justify-center hover:bg-zinc-800 mb-20 h-20"
+                onClick={downloadVideo}
+              >
+                <FaDownload />
+                Baixar Vídeo
               </button>
             </div>
           </>
