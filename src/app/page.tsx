@@ -20,7 +20,7 @@ export default function Home() {
       <footer className="bg-zinc-900 text-zinc-300 p-4 text-center flex justify-center">
         <button
           onClick={() => window.open("https://github.com/AlaPedro", "_blank")}
-          className="text-sm font-bold flex items-center gap-2"
+          className="text-sm font-bold flex items-center gap-2 cursor-pointers"
         >
           <FaGithub />
           Created by Alapedrodev

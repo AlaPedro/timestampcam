@@ -18,12 +18,22 @@ export default function CameraCapture() {
   const [isProcessing, setIsProcessing] = useState(false); // Estado para controlar o processamento do vídeo
   const [stopedCamera, setStopedCamera] = useState(false);
   const [isClient, setIsClient] = useState(false); // Flag to track if we're on client side
+  const [isMobile, setIsMobile] = useState(false); // Flag para detectar dispositivos móveis
+  const [recordingError, setRecordingError] = useState<string | null>(null); // Para mostrar erros de gravação
 
   // Set isClient to true when component mounts (client-side only)
   useEffect(() => {
     setIsClient(true);
     // Set initial time
     setCurrentTime(new Date().toLocaleString());
+
+    // Detectar se é um dispositivo móvel
+    const checkMobile = () => {
+      return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+        navigator.userAgent
+      );
+    };
+    setIsMobile(checkMobile());
   }, []);
 
   // Atualiza o timestamp a cada segundo (only on client side)
@@ -45,9 +55,14 @@ export default function CameraCapture() {
     }
 
     setIsCameraActive(true);
+    setRecordingError(null);
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: useFrontCamera ? "user" : "environment" },
+        video: {
+          facingMode: useFrontCamera ? "user" : "environment",
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
         audio: true, // Habilita áudio para gravação
       });
       if (videoRef.current) {
@@ -56,6 +71,9 @@ export default function CameraCapture() {
       setStream(mediaStream);
     } catch (err) {
       console.error("Erro ao acessar a câmera:", err);
+      setRecordingError(
+        "Não foi possível acessar a câmera. Verifique as permissões."
+      );
     }
   };
 
@@ -66,6 +84,34 @@ export default function CameraCapture() {
       stream.getTracks().forEach((track) => track.stop());
       startCamera();
     }
+  };
+
+  // Verifica se o navegador suporta o MediaRecorder
+  const getMediaRecorderOptions = () => {
+    // Verificar quais codecs são suportados
+    const mimeTypes = [
+      "video/webm;codecs=vp9",
+      "video/webm;codecs=vp8",
+      "video/webm",
+      "video/mp4",
+      "video/ogg;codecs=theora",
+      "video/ogg",
+    ];
+
+    for (const mimeType of mimeTypes) {
+      if (MediaRecorder.isTypeSupported(mimeType)) {
+        console.log(`Usando codec: ${mimeType}`);
+        return {
+          mimeType,
+          videoBitsPerSecond: isMobile ? 2500000 : 8000000, // Menor bitrate para dispositivos móveis
+        };
+      }
+    }
+
+    // Fallback para opções padrão
+    return {
+      videoBitsPerSecond: isMobile ? 2500000 : 8000000,
+    };
   };
 
   // Processa o vídeo com Canvas
@@ -98,7 +144,7 @@ export default function CameraCapture() {
           canvas.height = video.videoHeight;
 
           // Criar um stream de canvas para o MediaRecorder com taxa de quadros mais alta
-          const canvasStream = canvas.captureStream(60); // 60 FPS para melhor qualidade
+          const canvasStream = canvas.captureStream(30); // Reduzido para 30 FPS para melhor compatibilidade
 
           // Adicionar o áudio original do vídeo ao stream do canvas
           const audioTracks =
@@ -112,10 +158,8 @@ export default function CameraCapture() {
           }
 
           // Configurar o MediaRecorder para gravar o stream do canvas com alta qualidade
-          mediaRecorder = new MediaRecorder(canvasStream, {
-            mimeType: "video/webm;codecs=vp9",
-            videoBitsPerSecond: 8000000, // 8 Mbps para alta qualidade
-          });
+          const options = getMediaRecorderOptions();
+          mediaRecorder = new MediaRecorder(canvasStream, options);
 
           // Coletar os chunks de vídeo processado
           mediaRecorder.ondataavailable = (e) => {
@@ -127,7 +171,7 @@ export default function CameraCapture() {
           // Quando a gravação terminar, criar o vídeo final
           mediaRecorder.onstop = () => {
             const processedBlob = new Blob(processedChunks, {
-              type: "video/webm",
+              type: options.mimeType || "video/webm",
             });
             const processedUrl = URL.createObjectURL(processedBlob);
             setIsProcessing(false); // Para o indicador de processamento
@@ -135,7 +179,7 @@ export default function CameraCapture() {
           };
 
           // Iniciar a gravação do canvas com intervalo menor para capturar mais frames
-          mediaRecorder.start(100); // Captura dados a cada 100ms para melhor qualidade
+          mediaRecorder.start(200); // Aumentado para 200ms para melhor compatibilidade
 
           // Iniciar a reprodução do vídeo
           video.play();
@@ -241,70 +285,88 @@ export default function CameraCapture() {
   const startRecording = async () => {
     if (!stream) return;
 
-    // Configurar o MediaRecorder com alta qualidade
-    const mediaRecorder = new MediaRecorder(stream, {
-      mimeType: "video/webm;codecs=vp9",
-      videoBitsPerSecond: 8000000, // 8 Mbps para alta qualidade
-    });
-    const chunks: Blob[] = [];
+    setRecordingError(null);
 
-    mediaRecorder.ondataavailable = (e) => {
-      chunks.push(e.data);
-    };
+    try {
+      // Configurar o MediaRecorder com opções compatíveis
+      const options = getMediaRecorderOptions();
+      const mediaRecorder = new MediaRecorder(stream, options);
+      const chunks: Blob[] = [];
 
-    mediaRecorder.onstop = async () => {
-      const blob = new Blob(chunks, { type: "video/webm" });
-
-      // Processa o vídeo com Canvas
-      try {
-        const processedVideoUrl = await processVideoWithCanvas(blob);
-        setRecordedVideo(processedVideoUrl);
-      } catch (err) {
-        console.error("Erro ao processar vídeo:", err);
-        // Fallback para o vídeo original se o processamento falhar
-        const videoUrl = URL.createObjectURL(blob);
-        setRecordedVideo(videoUrl);
-        setIsProcessing(false); // Garantir que o indicador de processamento seja desativado
-      }
-
-      // Desativa a câmera após gravar o vídeo
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-        setStream(null);
-        setIsCameraActive(false);
-        setStopedCamera(true);
-      }
-
-      setIsRecording(false);
-      setCountdown(9); // Reseta o contador
-    };
-
-    // Iniciar a gravação com intervalo menor para capturar mais frames
-    mediaRecorder.start(100); // Captura dados a cada 100ms para melhor qualidade
-    setRecorder(mediaRecorder);
-    setIsRecording(true);
-    setCountdown(9);
-
-    // Contagem regressiva de 9s
-    const timer = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          if (mediaRecorder.state === "recording") {
-            mediaRecorder.stop();
-          }
-          return 0;
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunks.push(e.data);
         }
-        return prev - 1;
-      });
-    }, 1000);
+      };
 
-    // Garantir que a gravação pare após 9 segundos
-    setTimeout(() => {
-      if (mediaRecorder.state === "recording") {
-        mediaRecorder.stop();
-      }
-    }, 9000);
+      mediaRecorder.onstop = async () => {
+        if (chunks.length === 0) {
+          setRecordingError("Nenhum dado foi gravado. Tente novamente.");
+          setIsRecording(false);
+          return;
+        }
+
+        const blob = new Blob(chunks, {
+          type: options.mimeType || "video/webm",
+        });
+
+        // Processa o vídeo com Canvas
+        try {
+          const processedVideoUrl = await processVideoWithCanvas(blob);
+          setRecordedVideo(processedVideoUrl);
+        } catch (err) {
+          console.error("Erro ao processar vídeo:", err);
+          // Fallback para o vídeo original se o processamento falhar
+          const videoUrl = URL.createObjectURL(blob);
+          setRecordedVideo(videoUrl);
+          setIsProcessing(false); // Garantir que o indicador de processamento seja desativado
+        }
+
+        // Desativa a câmera após gravar o vídeo
+        if (stream) {
+          stream.getTracks().forEach((track) => track.stop());
+          setStream(null);
+          setIsCameraActive(false);
+          setStopedCamera(true);
+        }
+
+        setIsRecording(false);
+        setCountdown(9); // Reseta o contador
+      };
+
+      // Iniciar a gravação com intervalo menor para capturar mais frames
+      mediaRecorder.start(200); // Aumentado para 200ms para melhor compatibilidade
+      setRecorder(mediaRecorder);
+      setIsRecording(true);
+      setCountdown(9);
+
+      // Contagem regressiva de 9s
+      const timer = setInterval(() => {
+        setCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            if (mediaRecorder.state === "recording") {
+              mediaRecorder.stop();
+            }
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      // Garantir que a gravação pare após 9 segundos
+      setTimeout(() => {
+        if (mediaRecorder.state === "recording") {
+          mediaRecorder.stop();
+        }
+      }, 9000);
+    } catch (error) {
+      console.error("Erro ao iniciar gravação:", error);
+      setRecordingError(
+        "Não foi possível iniciar a gravação. Verifique as permissões do navegador."
+      );
+      setIsRecording(false);
+    }
   };
 
   // Para a gravação manualmente
@@ -369,13 +431,19 @@ export default function CameraCapture() {
       )}
 
       {/* Canvas para captura */}
-
       <canvas ref={canvasRef} style={{ display: "none" }}></canvas>
 
       {/* Contagem regressiva */}
       {isRecording && (
         <div className="text-red-600 font-bold text-xl">
           Tempo restante: {countdown}s
+        </div>
+      )}
+
+      {/* Mensagem de erro */}
+      {recordingError && (
+        <div className="text-red-600 font-bold text-xl p-2 bg-red-100 rounded">
+          {recordingError}
         </div>
       )}
 
