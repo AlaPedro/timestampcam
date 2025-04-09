@@ -1,21 +1,12 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
-import Image from "next/image";
-import {
-  FaCamera,
-  FaDownload,
-  FaStop,
-  FaPlay,
-  FaVideo,
-  FaSync,
-} from "react-icons/fa";
+import { FaDownload, FaStop, FaPlay, FaVideo, FaSync } from "react-icons/fa";
 
 export default function CameraCapture() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textOverlayRef = useRef<HTMLDivElement>(null); // Referência para a div do texto
-  const [photo, setPhoto] = useState<string | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [useFrontCamera, setUseFrontCamera] = useState(false);
@@ -24,7 +15,8 @@ export default function CameraCapture() {
   const [isRecording, setIsRecording] = useState(false);
   const [countdown, setCountdown] = useState(9); // Contagem regressiva de 9s
   const [currentTime, setCurrentTime] = useState(""); // Timestamp atualizado
-
+  const [isProcessing, setIsProcessing] = useState(false); // Estado para controlar o processamento do vídeo
+  const [stopedCamera, setStopedCamera] = useState(false);
   // Atualiza o timestamp a cada segundo
   useEffect(() => {
     const timer = setInterval(() => {
@@ -35,6 +27,12 @@ export default function CameraCapture() {
 
   // Inicia a câmera
   const startCamera = async () => {
+    // Se houver um vídeo gravado anteriormente, recarrega a página
+    if (recordedVideo) {
+      window.location.reload();
+      return;
+    }
+
     setIsCameraActive(true);
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
@@ -59,26 +57,9 @@ export default function CameraCapture() {
     }
   };
 
-  // Para a câmera
-  const stopCamera = () => {
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
-      setStream(null);
-    }
-  };
-
-  // Download da foto
-  const downloadPhoto = () => {
-    if (!photo) return;
-
-    const link = document.createElement("a");
-    link.download = `foto-${new Date().toISOString()}.jpg`;
-    link.href = photo;
-    link.click();
-  };
-
   // Processa o vídeo com Canvas
   const processVideoWithCanvas = async (blob: Blob) => {
+    setIsProcessing(true); // Inicia o indicador de processamento
     return new Promise<string>((resolve, reject) => {
       try {
         // Criar elementos de vídeo e canvas
@@ -90,6 +71,7 @@ export default function CameraCapture() {
         const ctx = canvas.getContext("2d", { alpha: false });
 
         if (!ctx) {
+          setIsProcessing(false); // Para o indicador de processamento em caso de erro
           reject(new Error("Não foi possível obter o contexto do canvas"));
           return;
         }
@@ -134,6 +116,7 @@ export default function CameraCapture() {
               type: "video/webm",
             });
             const processedUrl = URL.createObjectURL(processedBlob);
+            setIsProcessing(false); // Para o indicador de processamento
             resolve(processedUrl);
           };
 
@@ -230,9 +213,11 @@ export default function CameraCapture() {
 
         // Em caso de erro
         video.onerror = (error) => {
+          setIsProcessing(false); // Para o indicador de processamento em caso de erro
           reject(new Error(`Erro ao processar o vídeo: ${error}`));
         };
       } catch (error) {
+        setIsProcessing(false); // Para o indicador de processamento em caso de erro
         reject(error);
       }
     });
@@ -265,6 +250,15 @@ export default function CameraCapture() {
         // Fallback para o vídeo original se o processamento falhar
         const videoUrl = URL.createObjectURL(blob);
         setRecordedVideo(videoUrl);
+        setIsProcessing(false); // Garantir que o indicador de processamento seja desativado
+      }
+
+      // Desativa a câmera após gravar o vídeo
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+        setStream(null);
+        setIsCameraActive(false);
+        setStopedCamera(true);
       }
 
       setIsRecording(false);
@@ -327,7 +321,7 @@ export default function CameraCapture() {
 
   return (
     <div className="flex flex-col gap-4 items-center justify-center px-4">
-      {!isCameraActive && (
+      {!isCameraActive && stopedCamera && (
         <span className="text-zinc-800 font-bold text-lg">
           Inicie a câmera para registrar o horário
         </span>
@@ -336,16 +330,18 @@ export default function CameraCapture() {
       {/* Container da câmera com texto sobreposto */}
       {isCameraActive && (
         <div className="relative w-full">
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            muted
-            style={{
-              width: "100%",
-              transform: useFrontCamera ? "scaleX(-1)" : "none", // Espelha a câmera frontal
-            }}
-          ></video>
+          {!recordedVideo && (
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              style={{
+                width: "100%",
+                transform: useFrontCamera ? "scaleX(-1)" : "none", // Espelha a câmera frontal
+              }}
+            ></video>
+          )}
 
           {/* Texto sobreposto */}
           <div
@@ -358,6 +354,7 @@ export default function CameraCapture() {
       )}
 
       {/* Canvas para captura */}
+
       <canvas ref={canvasRef} style={{ display: "none" }}></canvas>
 
       {/* Contagem regressiva */}
@@ -367,17 +364,19 @@ export default function CameraCapture() {
         </div>
       )}
 
+      {/* Indicador de processamento do vídeo */}
+      {isProcessing && (
+        <div className="flex flex-col items-center justify-center p-4 bg-zinc-100 rounded-lg shadow-md">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-zinc-900 mb-2"></div>
+          <p className="text-zinc-800 font-bold text-lg">
+            Gerando vídeo seguro
+          </p>
+        </div>
+      )}
+
       {/* Botões */}
       <div className="flex flex-col gap-4">
-        {isCameraActive ? (
-          <button
-            className="bg-zinc-900 text-zinc-50 p-2 rounded-md flex items-center gap-2 justify-center"
-            onClick={stopCamera}
-          >
-            <FaStop />
-            Parar Câmera
-          </button>
-        ) : (
+        {!isCameraActive && (
           <button
             className="bg-zinc-900 text-zinc-50 p-2 rounded-md flex items-center gap-2 justify-center"
             onClick={startCamera}
@@ -389,7 +388,7 @@ export default function CameraCapture() {
 
         {isCameraActive && (
           <button
-            className="bg-zinc-900 text-zinc-50 p-2 rounded-md flex items-center gap-2 justify-center"
+            className="bg-blue-900 text-zinc-50 p-2 rounded-md flex items-center gap-2 justify-center"
             onClick={toggleCamera}
           >
             <FaSync />
@@ -418,33 +417,16 @@ export default function CameraCapture() {
           </button>
         )}
 
-        {photo && (
-          <>
-            <div className="flex flex-col gap-4 px-4">
-              <h3>Prévia da Foto:</h3>
-              <Image
-                src={photo}
-                alt="Foto capturada"
-                width={400}
-                height={300}
-                style={{ maxWidth: "100%" }}
-              />
-              <button
-                className="bg-zinc-900 text-zinc-50 p-2 rounded-md flex items-center gap-2 justify-center hover:bg-zinc-800"
-                onClick={downloadPhoto}
-              >
-                <FaDownload />
-                Baixar Foto
-              </button>
-            </div>
-          </>
-        )}
-
         {recordedVideo && (
           <>
             <div className="flex flex-col gap-4 px-4">
               <h3>Prévia do Vídeo:</h3>
-              <video src={recordedVideo} controls style={{ width: "100%" }} />
+              <video
+                src={recordedVideo}
+                controls
+                muted={isProcessing}
+                style={{ width: "100%" }}
+              />
               <button
                 className="bg-zinc-900 text-zinc-50 p-2 rounded-md flex items-center gap-2 justify-center hover:bg-zinc-800 mb-20 h-20"
                 onClick={downloadVideo}
