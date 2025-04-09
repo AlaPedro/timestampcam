@@ -17,13 +17,24 @@ export default function CameraCapture() {
   const [currentTime, setCurrentTime] = useState(""); // Timestamp atualizado
   const [isProcessing, setIsProcessing] = useState(false); // Estado para controlar o processamento do vídeo
   const [stopedCamera, setStopedCamera] = useState(false);
-  // Atualiza o timestamp a cada segundo
+  const [isClient, setIsClient] = useState(false); // Flag to track if we're on client side
+
+  // Set isClient to true when component mounts (client-side only)
   useEffect(() => {
+    setIsClient(true);
+    // Set initial time
+    setCurrentTime(new Date().toLocaleString());
+  }, []);
+
+  // Atualiza o timestamp a cada segundo (only on client side)
+  useEffect(() => {
+    if (!isClient) return;
+
     const timer = setInterval(() => {
       setCurrentTime(new Date().toLocaleString());
     }, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [isClient]);
 
   // Inicia a câmera
   const startCamera = async () => {
