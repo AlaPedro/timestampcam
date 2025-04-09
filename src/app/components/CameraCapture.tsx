@@ -352,7 +352,8 @@ export default function CameraCapture() {
               muted
               style={{
                 width: "100%",
-                transform: useFrontCamera ? "scaleX(-1)" : "none", // Espelha a câmera frontal
+                borderRadius: "10px",
+                boxShadow: "0 10px 10px 0 rgba(0, 0, 0, 0.3)",
               }}
             ></video>
           )}
