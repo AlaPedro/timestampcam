@@ -14,7 +14,6 @@ export default function CameraCapture() {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(""); // Timestamp atualizado
   const [isClient, setIsClient] = useState(false); // Flag to track if we're on client side
-  const [isMobile, setIsMobile] = useState(false); // Flag para detectar dispositivos móveis
   const [cameraError, setCameraError] = useState<string | null>(null); // Para mostrar erros da câmera
 
   // Set isClient to true when component mounts (client-side only)
@@ -22,14 +21,6 @@ export default function CameraCapture() {
     setIsClient(true);
     // Set initial time
     setCurrentTime(new Date().toLocaleString());
-
-    // Detectar se é um dispositivo móvel
-    const checkMobile = () => {
-      return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-        navigator.userAgent
-      );
-    };
-    setIsMobile(checkMobile());
   }, []);
 
   // Atualiza o timestamp a cada segundo (only on client side)
