@@ -116,8 +116,19 @@ export default function CameraCapture() {
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
+    // Se estiver usando a câmera frontal, inverte o contexto horizontalmente
+    if (useFrontCamera) {
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+    }
+
     // Desenhar o frame atual no canvas
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // Se estiver usando a câmera frontal, restaura o contexto
+    if (useFrontCamera) {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+    }
 
     // Adicionar texto (mesmo estilo da foto)
     const timestamp = new Date().toLocaleString();
