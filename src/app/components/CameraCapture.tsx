@@ -4,6 +4,7 @@ import { useRef, useState, useEffect } from "react";
 import { FaDownload, FaCamera, FaSync, FaEye } from "react-icons/fa";
 import { supabase } from "../../../lib/supabase";
 import Link from "next/link";
+import { toast } from "react-hot-toast";
 
 export default function CameraCapture() {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -204,6 +205,8 @@ export default function CameraCapture() {
     // Faz o upload para o Supabase
     await uploadPhoto(blob, fileName);
 
+    toast.success("Foto registrada com sucesso!");
+
     // Faz o download direto da imagem
     link.download = fileName;
     link.href = capturedImage;
@@ -237,10 +240,19 @@ export default function CameraCapture() {
             }}
           ></video>
 
+          {isCameraActive && (
+            <button
+              className="bg-white w-16 h-16 rounded-full text-zinc-50 p-2 flex items-center gap-2 justify-center absolute bottom-2 right-0 left-0 mx-auto"
+              onClick={capturePhoto}
+            >
+              <FaCamera size={30} className="text-emerald-900" />
+            </button>
+          )}
+
           {/* Texto sobreposto */}
           <div
             ref={textOverlayRef}
-            className="absolute bottom-5 left-3 text-white bg-black bg-opacity-50 p-2 text-base font-bold rounded"
+            className="absolute top-2 left-2 text-white bg-black bg-opacity-50 p-2 text-base font-bold rounded"
           >
             {currentTime}
           </div>
@@ -260,16 +272,16 @@ export default function CameraCapture() {
       {/* Botões */}
       <div className="flex flex-col gap-4 w-full">
         {!isCameraActive && (
-          <div className="flex  gap-4">
+          <div className="flex gap-4">
             <button
-              className="bg-blue-900 text-zinc-50 p-2 px-4 rounded-md flex items-center gap-2 justify-center mt-4 h-20"
+              className="bg-blue-900 text-zinc-50 p-2 px-4 rounded-md flex items-center gap-2 justify-center mt-4 h-20 w-1/2"
               onClick={startCamera}
             >
               <FaCamera />
               Iniciar Câmera
             </button>
-            <Link href="/feed">
-              <button className="bg-emerald-900 text-zinc-50 p-2 px-4 rounded-md flex items-center gap-2 justify-center mt-4 h-20">
+            <Link className="w-1/2" href="/feed">
+              <button className="bg-emerald-900 text-zinc-50 p-2 px-4 rounded-md flex items-center gap-2 justify-center mt-4 h-20 w-full">
                 <FaEye />
                 Ver Feed
               </button>
@@ -284,16 +296,6 @@ export default function CameraCapture() {
           >
             <FaSync />
             Alternar para {useFrontCamera ? "Traseira" : "Frontal"}
-          </button>
-        )}
-
-        {isCameraActive && (
-          <button
-            className="bg-emerald-900 h-20 w-full text-zinc-50 p-2 rounded-md flex items-center gap-2 justify-center"
-            onClick={capturePhoto}
-          >
-            <FaCamera />
-            Tirar Foto
           </button>
         )}
 
