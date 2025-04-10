@@ -257,10 +257,10 @@ export default function CameraCapture() {
       )}
 
       {/* Botões */}
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4 w-full">
         {!isCameraActive && (
           <button
-            className="bg-blue-900 text-zinc-50 p-2 rounded-md flex items-center gap-2 justify-center mt-4 h-20"
+            className="bg-blue-900 text-zinc-50 p-2 px-4 rounded-md flex items-center gap-2 justify-center mt-4 h-20"
             onClick={startCamera}
           >
             <FaCamera />
@@ -270,7 +270,7 @@ export default function CameraCapture() {
 
         {isCameraActive && (
           <button
-            className="bg-blue-900 text-zinc-50 p-2 rounded-md flex items-center gap-2 justify-center"
+            className="bg-blue-900 text-zinc-50 p-2 rounded-md flex items-center gap-2 justify-center h-20"
             onClick={toggleCamera}
           >
             <FaSync />
@@ -280,7 +280,7 @@ export default function CameraCapture() {
 
         {isCameraActive && (
           <button
-            className="bg-zinc-900 text-zinc-50 p-2 rounded-md flex items-center gap-2 justify-center"
+            className="bg-emerald-900 h-20 w-full text-zinc-50 p-2 rounded-md flex items-center gap-2 justify-center"
             onClick={capturePhoto}
           >
             <FaCamera />
