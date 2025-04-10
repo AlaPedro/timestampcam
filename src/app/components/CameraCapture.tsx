@@ -67,12 +67,36 @@ export default function CameraCapture() {
   };
 
   // Alterna entre câmeras
-  const toggleCamera = () => {
-    setUseFrontCamera(!useFrontCamera);
+  const toggleCamera = async () => {
+    // Primeiro, pare o stream atual
     if (stream) {
       stream.getTracks().forEach((track) => track.stop());
-      startCamera();
     }
+
+    // Atualize o estado e aguarde a atualização
+    setUseFrontCamera((prev) => !prev);
+
+    // Pequeno delay para garantir que o estado foi atualizado
+    setTimeout(async () => {
+      try {
+        const mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: !useFrontCamera ? "user" : "environment",
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: false,
+        });
+
+        if (videoRef.current) {
+          videoRef.current.srcObject = mediaStream;
+        }
+        setStream(mediaStream);
+      } catch (err) {
+        console.error("Erro ao alternar câmera:", err);
+        setCameraError("Não foi possível alternar para a câmera selecionada.");
+      }
+    }, 100);
   };
 
   // Captura uma foto
@@ -241,12 +265,21 @@ export default function CameraCapture() {
           ></video>
 
           {isCameraActive && (
-            <button
-              className="bg-white w-16 h-16 rounded-full text-zinc-50 p-2 flex items-center gap-2 justify-center absolute bottom-2 right-0 left-0 mx-auto"
-              onClick={capturePhoto}
-            >
-              <FaCamera size={30} className="text-emerald-900" />
-            </button>
+            <div>
+              <button
+                className="bg-white w-16 h-16 rounded-full text-zinc-50 p-2 flex items-center gap-2 justify-center absolute bottom-2 right-0 left-0 mx-auto"
+                onClick={capturePhoto}
+              >
+                <FaCamera size={30} className="text-emerald-900" />
+              </button>
+
+              <button
+                className="bg-white w-10 h-10 rounded-full text-zinc-50 p-2 flex items-center gap-2 justify-center absolute top-2 right-2 mx-auto"
+                onClick={toggleCamera}
+              >
+                <FaSync size={20} className="text-emerald-900" />
+              </button>
+            </div>
           )}
 
           {/* Texto sobreposto */}
@@ -272,31 +305,21 @@ export default function CameraCapture() {
       {/* Botões */}
       <div className="flex flex-col gap-4 w-full">
         {!isCameraActive && (
-          <div className="flex gap-4">
+          <div className="w-full bg-zinc-800/30 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-zinc-700/50 flex gap-4 items-center justify-center">
             <button
-              className="bg-blue-900 text-zinc-50 p-2 px-4 rounded-md flex items-center gap-2 justify-center mt-4 h-20 w-1/2"
+              className="bg-blue-900 font-semibold text-zinc-50 p-2 px-4 rounded-md flex items-center gap-2 justify-center mt-4 h-20 w-1/2"
               onClick={startCamera}
             >
               <FaCamera />
-              Iniciar Câmera
+              Câmera
             </button>
             <Link className="w-1/2" href="/feed">
-              <button className="bg-emerald-900 text-zinc-50 p-2 px-4 rounded-md flex items-center gap-2 justify-center mt-4 h-20 w-full">
+              <button className="bg-emerald-900 font-semibold text-zinc-50 p-2 px-4 rounded-md flex items-center gap-2 justify-center mt-4 h-20 w-full">
                 <FaEye />
-                Ver Feed
+                Feed
               </button>
             </Link>
           </div>
-        )}
-
-        {isCameraActive && (
-          <button
-            className="bg-blue-900 text-zinc-50 p-2 rounded-md flex items-center gap-2 justify-center h-20"
-            onClick={toggleCamera}
-          >
-            <FaSync />
-            Alternar para {useFrontCamera ? "Traseira" : "Frontal"}
-          </button>
         )}
 
         {capturedImage && (
