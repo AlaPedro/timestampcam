@@ -300,7 +300,7 @@ export default function CameraCapture() {
         {capturedImage && (
           <>
             <div className="flex flex-col gap-4 px-4">
-              <h3>Prévia da Foto:</h3>
+              <h3 className="text-zinc-200">Prévia da Foto:</h3>
               <img
                 src={capturedImage}
                 alt="Foto capturada"
