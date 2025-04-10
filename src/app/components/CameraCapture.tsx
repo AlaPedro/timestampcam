@@ -1,8 +1,9 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
-import { FaDownload, FaCamera, FaSync } from "react-icons/fa";
+import { FaDownload, FaCamera, FaSync, FaEye } from "react-icons/fa";
 import { supabase } from "../../../lib/supabase";
+import Link from "next/link";
 
 export default function CameraCapture() {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -259,13 +260,21 @@ export default function CameraCapture() {
       {/* Botões */}
       <div className="flex flex-col gap-4 w-full">
         {!isCameraActive && (
-          <button
-            className="bg-blue-900 text-zinc-50 p-2 px-4 rounded-md flex items-center gap-2 justify-center mt-4 h-20"
-            onClick={startCamera}
-          >
-            <FaCamera />
-            Iniciar Câmera
-          </button>
+          <div className="flex  gap-4">
+            <button
+              className="bg-blue-900 text-zinc-50 p-2 px-4 rounded-md flex items-center gap-2 justify-center mt-4 h-20"
+              onClick={startCamera}
+            >
+              <FaCamera />
+              Iniciar Câmera
+            </button>
+            <Link href="/feed">
+              <button className="bg-emerald-900 text-zinc-50 p-2 px-4 rounded-md flex items-center gap-2 justify-center mt-4 h-20">
+                <FaEye />
+                Ver Feed
+              </button>
+            </Link>
+          </div>
         )}
 
         {isCameraActive && (
