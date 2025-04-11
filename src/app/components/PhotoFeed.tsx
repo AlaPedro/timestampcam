@@ -36,15 +36,6 @@ export default function PhotoFeed() {
     });
   };
 
-  const formatDateHeader = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
-  };
-
   useEffect(() => {
     fetchPhotos();
   }, []);
@@ -87,11 +78,17 @@ export default function PhotoFeed() {
 
   const groupPhotosByDay = (photos: Photo[]): GroupedPhotos => {
     return photos.reduce((groups: GroupedPhotos, photo) => {
-      const date = new Date(photo.created_at).toLocaleDateString("pt-BR");
-      if (!groups[date]) {
-        groups[date] = [];
+      const date = new Date(photo.created_at);
+      const formattedDate = `${date.getDate().toString().padStart(2, "0")}/${(
+        date.getMonth() + 1
+      )
+        .toString()
+        .padStart(2, "0")}/${date.getFullYear()}`;
+
+      if (!groups[formattedDate]) {
+        groups[formattedDate] = [];
       }
-      groups[date].push(photo);
+      groups[formattedDate].push(photo);
       return groups;
     }, {});
   };
@@ -112,7 +109,7 @@ export default function PhotoFeed() {
         {Object.entries(groupedPhotos).map(([date, photos]) => (
           <AccordionItem key={date} value={date}>
             <AccordionTrigger className="text-lg font-semibold text-zinc-200">
-              {formatDateHeader(date)}
+              {date}
             </AccordionTrigger>
             <AccordionContent>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
