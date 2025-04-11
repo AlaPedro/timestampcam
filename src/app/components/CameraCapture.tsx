@@ -210,7 +210,8 @@ export default function CameraCapture() {
 
   const uploadPhoto = async (file: Blob, fileName: string) => {
     const fileExt = fileName.split(".").pop();
-    const newFileName = `${Math.random()}.${fileExt}`;
+    const timestamp = new Date().toISOString();
+    const newFileName = `${timestamp}.${fileExt}`;
 
     const { data, error } = await supabase.storage
       .from("badalacam") // nome do seu bucket
