@@ -51,7 +51,9 @@ export default function PhotoFeed() {
 
   const fetchPhotos = async () => {
     try {
-      const { data, error } = await supabase.storage.from("badalacam").list();
+      const { data, error } = await supabase.storage
+        .from("dev-badalacam")
+        .list();
 
       if (error) {
         console.error("Error fetching photos:", error);
@@ -62,7 +64,7 @@ export default function PhotoFeed() {
         data.map(async (file) => {
           const {
             data: { publicUrl },
-          } = supabase.storage.from("badalacam").getPublicUrl(file.name);
+          } = supabase.storage.from("dev-badalacam").getPublicUrl(file.name);
 
           return {
             name: file.name,

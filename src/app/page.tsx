@@ -2,8 +2,32 @@
 
 import CameraCapture from "./components/CameraCapture";
 import { FaCamera, FaGithub } from "react-icons/fa";
+import { useAuth } from "./contexts/AuthContext";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 export default function Home() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/auth");
+    }
+  }, [user, loading, router]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-zinc-900 to-black">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-zinc-900 to-black font-chakra-petch">
       {/* Header */}

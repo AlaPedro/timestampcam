@@ -213,7 +213,7 @@ export default function CameraCapture() {
     const newFileName = `${Math.random()}.${fileExt}`;
 
     const { data, error } = await supabase.storage
-      .from("badalacam") // nome do seu bucket
+      .from("dev-badalacam") // nome do seu bucket
       .upload(newFileName, file);
 
     if (error) {
@@ -224,7 +224,7 @@ export default function CameraCapture() {
     // Retorna URL pública da imagem
     const {
       data: { publicUrl },
-    } = supabase.storage.from("badalacam").getPublicUrl(data.path);
+    } = supabase.storage.from("dev-badalacam").getPublicUrl(data.path);
 
     return publicUrl;
   };
